@@ -14,7 +14,8 @@ def load_data(file):
     if os.path.exists(file):
         with open(file, "r", encoding="utf-8") as f:
             try:
-                return json.load(f)
+                data = json.load(f)
+                return data
             except:
                 return [] if file == CHAT_FILE else {}
     return [] if file == CHAT_FILE else {}
@@ -35,7 +36,7 @@ if "username" not in st.session_state:
 
 # --- GİRİŞ / KAYIT EKRANI ---
 if not st.session_state.logged_in:
-    st.title("🏰 Hükümdarlık YNT: v20.1")
+    st.title("🏰 Hükümdarlık YNT: v20.2")
     tab1, tab2 = st.tabs(["Giriş Yap", "Kayıt Ol"])
     
     with tab1:
@@ -46,7 +47,7 @@ if not st.session_state.logged_in:
                 st.session_state.logged_in = True
                 st.session_state.username = u
                 st.rerun()
-            else: st.error("Hatalı bilgi!")
+            else: st.error("Hatalı bilgi veya kullanıcı bulunamadı!")
 
     with tab2:
         nu = st.text_input("Yeni Ad", key="reg_u")
@@ -55,21 +56,19 @@ if not st.session_state.logged_in:
             if nu not in users and nu != "":
                 users[nu] = {"password": np, "altin": 100, "asker": 10, "isçi": 1, "elmas": 0, "market": []}
                 save_data(DB_FILE, users)
-                st.success("Kayıt Başarılı!")
-            else: st.error("Geçersiz ad veya kullanıcı var!")
+                st.success(f"Hoş geldin {nu}! Şimdi giriş yapabilirsin.")
+            else: st.error("Bu ad zaten alınmış veya geçersiz!")
 
 # --- OYUN ANA EKRANI ---
 else:
     user = st.session_state.username
-    # --- KRİTİK ADMİN AYARI ---
-    # Sadece senin ismin yetkili!
     is_admin = (user == "Paramen42")
 
     # Sidebar: Bilgiler ve ÇIKIŞ YAP
     st.sidebar.title(f"👑 {user}")
-    st.sidebar.metric("💰 Altın", users[user]["altin"])
+    st.sidebar.metric("💰 Altın", users[user].get("altin", 0))
     st.sidebar.metric("💎 Elmas", users[user].get("elmas", 0))
-    st.sidebar.metric("⚔️ Asker", users[user]["asker"])
+    st.sidebar.metric("⚔️ Asker", users[user].get("asker", 0))
     
     if st.sidebar.button("🚪 ÇIKIŞ YAP", use_container_width=True):
         st.session_state.logged_in = False
@@ -102,8 +101,8 @@ else:
     # SEKME 2: MARKET
     with t_list[1]:
         st.subheader("Krallık Mağazası")
-        items = {"🛡️ Çelik Zırh": 200, "🐎 Savaş Atı": 500, "🏰 Kale Suru": 1000}
-        for item, price in items.items():
+        market_items = {"🛡️ Çelik Zırh": 200, "🐎 Savaş Atı": 500, "🏰 Kale Suru": 1000}
+        for item, price in market_items.items():
             if st.button(f"{item} Satın Al ({price} Altın)"):
                 if users[user]["altin"] >= price:
                     users[user]["altin"] -= price
@@ -115,32 +114,35 @@ else:
     # SEKME 3: CHAT
     with t_list[2]:
         st.subheader("Global Sohbet")
-        msg = st.text_input("Mesajını Yaz...", key="chat_input")
+        msg = st.text_input("Mesajını Yaz...", key="chat_msg")
         if st.button("Gönder"):
             if msg:
                 chat_messages.append(f"{datetime.now().strftime('%H:%M')} **{user}**: {msg}")
                 save_data(CHAT_FILE, chat_messages); st.rerun()
         
         st.divider()
-        for m in reversed(chat_messages[-10:]):
-            st.write(m)
+        if isinstance(chat_messages, list):
+            for m in reversed(chat_messages[-15:]):
+                st.write(m)
 
     # SEKME 4: ADMIN VEYA SIRALAMA
     if is_admin:
         with t_list[3]:
             st.header("⚡ Paramen42 Yetkili Paneli")
-            target_user = st.selectbox("Oyuncu Seç", list(users.keys()))
-            new_gold = st.number_input("Altın Miktarı Ayarla", value=users[target_user]["altin"])
-            if st.button("Hükümdar Emriyle Güncelle"):
-                users[target_user]["altin"] = new_gold
-                save_data(DB_FILE, users); st.success(f"{target_user} verileri güncellendi!")
-            
-            if st.button("🚨 TÜM KRALLIKLARI SIFIRLA"):
-                save_data(DB_FILE, {}); st.warning("Tüm veriler silindi!")
-                st.rerun()
+            if users:
+               # Bu satırı bul ve tam olarak bunu yapıştır:
+new_gold = st.number_input("Altın Miktarı Ayarla", value=int(users[target_user].get("altin", 0)))
+                current_gold = users[target_user].get("altin", 0)
+                new_gold = st.number_input("Altın Miktarı Ayarla", value=int(current_gold))
+                if st.button("Hükümdar Emriyle Güncelle"):
+                    users[target_user]["altin"] = new_gold
+                    save_data(DB_FILE, users); st.success(f"{target_user} için altın güncellendi!")
+                    st.rerun()
+            else:
+                st.info("Henüz kayıtlı başka oyuncu yok.")
     else:
         with t_list[3]:
             st.subheader("🏆 En Zenginler")
-            sorted_users = sorted(users.items(), key=lambda x: x[1]['altin'], reverse=True)
+            sorted_users = sorted(users.items(), key=lambda x: x[1].get('altin', 0), reverse=True)
             for i, (name, data) in enumerate(sorted_users[:5]):
-                st.write(f"{i+1}. **{name}**: {data['altin']} Altın")
+                st.write(f"{i+1}. **{name}**: {data.get('altin', 0)} Altın")
