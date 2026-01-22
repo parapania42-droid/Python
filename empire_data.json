@@ -1,0 +1,38 @@
+{
+    "para": 31470000,
+    "yakit": 100,
+    "tech": [],
+    "kuyruk": [],
+    "binalar": {
+        "Demir Madeni": 3,
+        "Bak\u0131r \u0130\u015fletmesi": 1,
+        "Petrol Kuyusu": 1,
+        "Silikon Ar\u0131tma": 0
+    },
+    "envanter": {
+        "Demir": 8178.0334824054025,
+        "Bak\u0131r": 155.8265771960617,
+        "Petrol": 108.20670832692261,
+        "Silikon": 0
+    },
+    "mamul_stok": {
+        "\u00c7elik Levha": 0,
+        "\u0130\u015flemci": 0,
+        "Lityum Batarya": 0
+    },
+    "depo": {
+        "Demir Madeni": 6131.657593992493,
+        "Bak\u0131r \u0130\u015fletmesi": 592.9140870635309,
+        "Petrol Kuyusu": 415.83438460132805,
+        "Silikon Ar\u0131tma": 0
+    },
+    "gecmis": [
+        31470000,
+        31470000,
+        31470000,
+        31470000,
+        31470000
+    ],
+    "drone_lvl": 1,
+    "son_tik": 1769079311.5416837
+}
