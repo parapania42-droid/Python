@@ -1,148 +1,123 @@
 import streamlit as st
-import json
-import os
-from datetime import datetime
+import pandas as pd
+from streamlit_gsheets import GSheetsConnection
 
-# --- SAYFA AYARLARI ---
-st.set_page_config(page_title="Paramen42 İmparatorluğu", page_icon="👑", layout="wide")
+# Sayfa Yapılandırması
+st.set_page_config(page_title="Paramen42 Krallığı", page_icon="🏰")
 
-# --- VERİ TABANI SİSTEMİ ---
-DB_FILE = "empire_data.json"
-CHAT_FILE = "chat_logs.json"
+# Google Sheets Bağlantısı
+conn = st.connection("gsheets", type=GSheetsConnection)
 
-def load_data(file):
-    if os.path.exists(file):
-        with open(file, "r", encoding="utf-8") as f:
-            try:
-                data = json.load(f)
-                return data
-            except:
-                return [] if file == CHAT_FILE else {}
-    return [] if file == CHAT_FILE else {}
+# Verileri Çekme Fonksiyonu
+def load_data():
+    try:
+        df = conn.read(ttl="0s")
+        # Boş satırları temizle
+        df = df.dropna(how="all")
+        return df
+    except:
+        return pd.DataFrame(columns=["username", "password", "altin", "odun", "tas"])
 
-def save_data(file, data):
-    with open(file, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+# Verileri Kaydetme Fonksiyonu
+def save_data(df):
+    conn.update(data=df)
+    st.cache_data.clear()
 
-# Verileri yükle
-users = load_data(DB_FILE)
-chat_messages = load_data(CHAT_FILE)
+# Ana Başlık
+st.title("🏰 Paramen42 İmparatorluğu v20.4")
 
-# --- OTURUM YÖNETİMİ ---
+# Veriyi Yükle
+df = load_data()
+users = df.set_index("username").to_dict(orient="index") if not df.empty else {}
+
+# Oturum Durumu Kontrolü
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
-if "username" not in st.session_state:
-    st.session_state.username = ""
+    st.session_state.user = ""
 
-# --- GİRİŞ / KAYIT EKRANI ---
+# --- GİRİŞ VE KAYIT EKRANI ---
 if not st.session_state.logged_in:
-    st.title("🏰 Hükümdarlık YNT: v20.2")
-    tab1, tab2 = st.tabs(["Giriş Yap", "Kayıt Ol"])
+    tab1, tab2 = st.tabs(["🔐 Giriş Yap", "📝 Kayıt Ol"])
     
     with tab1:
-        u = st.text_input("Kullanıcı Adı", key="login_u")
-        p = st.text_input("Şifre", type="password", key="login_p")
-        if st.button("Giriş Yap"):
-            if u in users and users[u]["password"] == p:
+        username = st.text_input("Kullanıcı Adı")
+        password = st.text_input("Şifre", type="password")
+        if st.button("Giriş"):
+            if username in users and str(users[username]["password"]) == password:
                 st.session_state.logged_in = True
-                st.session_state.username = u
+                st.session_state.user = username
+                st.success(f"Hoş geldin Hükümdar {username}!")
                 st.rerun()
-            else: st.error("Hatalı bilgi veya kullanıcı bulunamadı!")
+            else:
+                st.error("Hatalı kullanıcı adı veya şifre!")
 
     with tab2:
-        nu = st.text_input("Yeni Ad", key="reg_u")
-        np = st.text_input("Yeni Şifre", type="password", key="reg_p")
+        new_user = st.text_input("Yeni Kullanıcı Adı")
+        new_pass = st.text_input("Yeni Şifre", type="password")
         if st.button("Kayıt Ol"):
-            if nu not in users and nu != "":
-                users[nu] = {"password": np, "altin": 100, "asker": 10, "isçi": 1, "elmas": 0, "market": []}
-                save_data(DB_FILE, users)
-                st.success(f"Hoş geldin {nu}! Şimdi giriş yapabilirsin.")
-            else: st.error("Bu ad zaten alınmış veya geçersiz!")
+            if new_user and new_user not in users:
+                new_data = pd.DataFrame([{
+                    "username": new_user,
+                    "password": new_pass,
+                    "altin": 1000,
+                    "odun": 0,
+                    "tas": 0
+                }])
+                df = pd.concat([df, new_data], ignore_index=True)
+                save_data(df)
+                st.success("Kayıt başarılı! Şimdi giriş yapabilirsin.")
+            else:
+                st.warning("Bu kullanıcı adı zaten alınmış veya boş!")
 
-# --- OYUN ANA EKRANI ---
+# --- OYUN EKRANI ---
 else:
-    user = st.session_state.username
+    user = st.session_state.user
     is_admin = (user == "Paramen42")
-
-    # Sidebar: Bilgiler ve ÇIKIŞ YAP
-    st.sidebar.title(f"👑 {user}")
-    st.sidebar.metric("💰 Altın", users[user].get("altin", 0))
-    st.sidebar.metric("💎 Elmas", users[user].get("elmas", 0))
-    st.sidebar.metric("⚔️ Asker", users[user].get("asker", 0))
     
-    if st.sidebar.button("🚪 ÇIKIŞ YAP", use_container_width=True):
-        st.session_state.logged_in = False
-        st.session_state.username = ""
-        st.rerun()
+    t_list = ["🎒 Envanter", "🏗️ İnşaat", "⚔️ Ordu", "🛠️ Admin"]
+    tabs = st.tabs(t_list if is_admin else t_list[:3])
 
-    # --- ANA SEKMELER ---
-    tabs = ["🏗️ Üretim", "🛒 Market", "💬 Sohbet"]
-    if is_admin:
-        tabs.append("🛠️ Admin Paneli")
-    else:
-        tabs.append("🏆 Sıralama")
+    # SEKME 1: ENVANTER
+    with tabs[0]:
+        st.subheader(f"🛡️ {user} Cephaneliği")
+        # Veriyi anlık çekmek için tekrar users kullanıyoruz
+        current_user_data = users.get(user, {"altin": 0, "odun": 0, "tas": 0})
         
-    t_list = st.tabs(tabs)
+        col1, col2, col3 = st.columns(3)
+        col1.metric("💰 Altın", f"{current_user_data.get('altin', 0)}")
+        col2.metric("🪵 Odun", f"{current_user_data.get('odun', 0)}")
+        col3.metric("🪨 Taş", f"{current_user_data.get('tas', 0)}")
 
-    # SEKME 1: ÜRETİM
-    with t_list[0]:
-        col_a, col_b = st.columns(2)
-        with col_a:
-            if st.button("⛏️ Maden Çalıştır (+20 Altın)"):
-                users[user]["altin"] += 20
-                save_data(DB_FILE, users); st.rerun()
-        with col_b:
-            if st.button("🌾 Çiftlik Kur (50 Altın -> +1 İşçi)"):
-                if users[user]["altin"] >= 50:
-                    users[user]["altin"] -= 50
-                    users[user]["isçi"] = users[user].get("isçi", 0) + 1
-                    save_data(DB_FILE, users); st.rerun()
+    # SEKME 2: İNŞAAT
+    with tabs[1]:
+        st.info("İnşaat menüsü yakında eklenecek...")
 
-    # SEKME 2: MARKET
-    with t_list[1]:
-        st.subheader("Krallık Mağazası")
-        market_items = {"🛡️ Çelik Zırh": 200, "🐎 Savaş Atı": 500, "🏰 Kale Suru": 1000}
-        for item, price in market_items.items():
-            if st.button(f"{item} Satın Al ({price} Altın)"):
-                if users[user]["altin"] >= price:
-                    users[user]["altin"] -= price
-                    if "market" not in users[user]: users[user]["market"] = []
-                    users[user]["market"].append(item)
-                    save_data(DB_FILE, users); st.success(f"{item} Alındı!")
-                else: st.error("Para yetersiz!")
+    # SEKME 3: ORDU
+    with tabs[2]:
+        st.info("Ordu kurma özelliği yakında eklenecek...")
 
-    # SEKME 3: CHAT
-    with t_list[2]:
-        st.subheader("Global Sohbet")
-        msg = st.text_input("Mesajını Yaz...", key="chat_msg")
-        if st.button("Gönder"):
-            if msg:
-                chat_messages.append(f"{datetime.now().strftime('%H:%M')} **{user}**: {msg}")
-                save_data(CHAT_FILE, chat_messages); st.rerun()
-        
-        st.divider()
-        if isinstance(chat_messages, list):
-            for m in reversed(chat_messages[-15:]):
-                st.write(m)
-
-    # SEKME 4: ADMIN VEYA SIRALAMA
+    # SEKME 4: ADMIN PANELİ (Sadece Sana Özel)
     if is_admin:
-        with t_list[3]:
+        with tabs[3]:
             st.header("⚡ Paramen42 Yetkili Paneli")
             if users:
-               # Bu satırı bul ve tam olarak bunu yapıştır:
-new_gold = st.number_input("Altın Miktarı Ayarla", value=int(users[target_user].get("altin", 0)))
-                current_gold = users[target_user].get("altin", 0)
-                new_gold = st.number_input("Altın Miktarı Ayarla", value=int(current_gold))
+                target_user = st.selectbox("Oyuncu Seç", list(users.keys()))
+                
+                # Hata veren yerin güvenli hali:
+                target_data = users.get(target_user, {})
+                current_gold = target_data.get("altin", 0)
+                
+                new_gold = st.number_input("Altın Miktarı Ayarla", value=int(current_gold), key="admin_gold")
+                
                 if st.button("Hükümdar Emriyle Güncelle"):
-                    users[target_user]["altin"] = new_gold
-                    save_data(DB_FILE, users); st.success(f"{target_user} için altın güncellendi!")
+                    # Veriyi DataFrame üzerinde güncelle
+                    df.loc[df["username"] == target_user, "altin"] = new_gold
+                    save_data(df)
+                    st.success(f"{target_user} altın miktarı {new_gold} olarak güncellendi!")
                     st.rerun()
             else:
-                st.info("Henüz kayıtlı başka oyuncu yok.")
-    else:
-        with t_list[3]:
-            st.subheader("🏆 En Zenginler")
-            sorted_users = sorted(users.items(), key=lambda x: x[1].get('altin', 0), reverse=True)
-            for i, (name, data) in enumerate(sorted_users[:5]):
-                st.write(f"{i+1}. **{name}**: {data.get('altin', 0)} Altın")
+                st.warning("Sistemde henüz kayıtlı kullanıcı yok.")
+
+    if st.sidebar.button("Güvenli Çıkış"):
+        st.session_state.logged_in = False
+        st.rerun()
